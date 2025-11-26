@@ -39,20 +39,30 @@ pipeline {
 
                         dir("${c}") {
                             withAWS(credentials: "${AWS_CREDENTIALS_ID}", region: "${AWS_REGION}") {
-                                
-                                        // Only for VPN component
+
+                                // VPN component: pass public key via Terraform variable
                                 if (c == '30-vpn') {
                                     withCredentials([file(credentialsId: 'openvpn-pubkey', variable: 'PUBKEY')]) {
-                                        // copy to folder with same name that Terraform expects
-                                        sh 'cp $PUBKEY ./terraform.pub'
+                                        sh '''
+                                            PUB_KEY=$(cat $PUBKEY)
+                                            terraform init -input=false -reconfigure
+                                            terraform plan -input=false -var "openvpn_pub_key=$PUB_KEY"
+                                            terraform apply -auto-approve -var "openvpn_pub_key=$PUB_KEY"
+                                        '''
                                     }
+                                } else {
+                                    // Other components
+                                    sh '''
+                                        terraform init -input=false -reconfigure
+                                        terraform plan -input=false
+                                        terraform apply -auto-approve
+                                    '''
                                 }
-                                sh "terraform init -input=false -reconfigure"
-                                sh "terraform plan -input=false"
-                                sh "terraform apply -auto-approve"
+
                             }
                         }
                     }
+
                 }
             }
         }
