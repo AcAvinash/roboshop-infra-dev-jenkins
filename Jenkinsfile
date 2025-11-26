@@ -1,14 +1,13 @@
 pipeline {
     agent { label 'AGENT-1' }
 
+    options {
+        ansiColor('xterm')
+    }
+
     environment {
         AWS_REGION = 'us-east-1'
         AWS_CREDENTIALS_ID = 'aws'
-        REPO_ROOT = 'roboshop-dev-infra-jenkis'
-    }
-
-    options {
-        ansiColor('xterm')
     }
 
     stages {
@@ -19,10 +18,11 @@ pipeline {
             }
         }
 
-        stage('Prepare Components List') {
+        stage('Terraform Deploy All Components') {
             steps {
                 script {
-                    env.COMPONENTS = [
+
+                    def components = [
                         '00-vpc',
                         '10-sg',
                         '20-bastion',
@@ -32,28 +32,17 @@ pipeline {
                         '60-acm',
                         '70-frontend-alb',
                         '90-components'
-                    ].join(',')
-                }
-            }
-        }
+                    ]
 
-        stage('Terraform Run') {
-            steps {
-                script {
-                    def comps = env.COMPONENTS.split(',')
-
-                    for (c in comps) {
-
+                    for (c in components) {
                         echo "===== Processing: ${c} ====="
 
-                        dir("${REPO_ROOT}/${c}") {
-                            withAWS(credentials: AWS_CREDENTIALS_ID, region: AWS_REGION) {
+                        dir("${c}") {
+                            withAWS(credentials: "${AWS_CREDENTIALS_ID}", region: "${AWS_REGION}") {
 
                                 sh "terraform init -input=false -reconfigure"
-
                                 sh "terraform plan -input=false"
-
-                                sh "terraform apply -input=false -auto-approve"
+                                sh "terraform apply -auto-approve"
                             }
                         }
                     }
@@ -63,10 +52,15 @@ pipeline {
     }
 
     post {
-        success { echo "✅ Deployment Completed" }
-        failure { echo "❌ Deployment Failed" }
+        success {
+            echo "✅ Deployment Successful"
+        }
+        failure {
+            echo "❌ Deployment Failed"
+        }
     }
 }
+
 
 
 
