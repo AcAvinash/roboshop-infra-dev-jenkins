@@ -39,7 +39,14 @@ pipeline {
 
                         dir("${c}") {
                             withAWS(credentials: "${AWS_CREDENTIALS_ID}", region: "${AWS_REGION}") {
-
+                                
+                                        // Only for VPN component
+                                if (c == '30-vpn') {
+                                    withCredentials([file(credentialsId: 'openvpn-pubkey', variable: 'PUBKEY')]) {
+                                        // copy to folder with same name that Terraform expects
+                                        sh 'cp $PUBKEY ./terraform.pub'
+                                    }
+                                }
                                 sh "terraform init -input=false -reconfigure"
                                 sh "terraform plan -input=false"
                                 sh "terraform apply -auto-approve"
