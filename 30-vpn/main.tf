@@ -1,6 +1,6 @@
 resource "aws_key_pair" "openvpn" {
   key_name   = "openvpn"
-  public_key = file("C:\\Users\\acavi\\Downloads\\terraform.pub") 
+  public_key = file("${path.module}/terraform.pub")  # relative path
 }
 
 resource "aws_instance" "vpn" {
