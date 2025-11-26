@@ -10,6 +10,7 @@ pipeline {
 
     options {
         ansiColor('xterm')
+        timeout(time: 2, unit: 'HOURS')
     }
 
     stages {
@@ -39,48 +40,37 @@ pipeline {
             }
         }
 
-        stage('Terraform: Init & Plan') {
+        stage('Terraform: Sequential Deploy') {
             steps {
                 script {
                     def comps = env.COMPONENTS.split(',')
                     for (c in comps) {
-                        echo "==> Init & Plan: ${c}"
+                        echo "==> Processing Component: ${c}"
                         dir("${REPO_ROOT}/${c}") {
                             withAWS(credentials: "${AWS_CREDENTIALS_ID}", region: "${AWS_REGION}") {
-                                sh """
-                                    terraform init -input=false -reconfigure
-                                    terraform validate
-                                    terraform plan -input=false -var-file=../../envs/${TF_VAR_env}.tfvars -out=plan-${TF_VAR_env}-${c}.tfplan
-                                """
+
+                                //  Init
+                                echo "--> Init: ${c}"
+                                sh "terraform init -input=false -reconfigure"
+
+                                //  Validate
+                                echo "--> Validate: ${c}"
+                                sh "terraform validate"
+
+                                //  Plan
+                                echo "--> Plan: ${c}"
+                                sh "terraform plan -input=false -var-file=../../envs/${TF_VAR_env}.tfvars -out=plan-${TF_VAR_env}-${c}.tfplan"
                                 archiveArtifacts artifacts: "plan-${TF_VAR_env}-${c}.tfplan", fingerprint: true
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
-        stage('Manual Approval (optional for prod)') {
-            when { expression { return env.TF_VAR_env == 'prod' } }
-            steps {
-                script {
-                    input message: "Approve apply for ${TF_VAR_env}?"
-                }
-            }
-        }
+                                // Apply
+                                if (env.TF_VAR_env == 'prod') {
+                                    input message: "Approve apply for ${c} in ${TF_VAR_env}?"
+                                }
+                                echo "--> Apply: ${c}"
+                                sh "terraform apply -input=false plan-${TF_VAR_env}-${c}.tfplan"
 
-        stage('Terraform: Apply') {
-            steps {
-                script {
-                    def comps = env.COMPONENTS.split(',')
-                    for (c in comps) {
-                        echo "==> Applying: ${c}"
-                        dir("${REPO_ROOT}/${c}") {
-                            withAWS(credentials: "${AWS_CREDENTIALS_ID}", region: "${AWS_REGION}") {
-                                sh """
-                                    terraform apply -input=false plan-${TF_VAR_env}-${c}.tfplan
-                                    terraform output -json > outputs-${c}.json || true
-                                """
+                                // 5️⃣ Save Outputs
+                                sh "terraform output -json > outputs-${c}.json || true"
                                 archiveArtifacts artifacts: "outputs-${c}.json"
                             }
                         }
@@ -103,4 +93,3 @@ pipeline {
         }
     }
 }
-
