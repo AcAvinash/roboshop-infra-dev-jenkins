@@ -4,13 +4,11 @@ pipeline {
     environment {
         AWS_REGION = 'us-east-1'
         AWS_CREDENTIALS_ID = 'aws'
-        TF_VAR_env = 'dev'
         REPO_ROOT = 'roboshop-dev-infra-jenkis'
     }
 
     options {
         ansiColor('xterm')
-        timeout(time: 2, unit: 'HOURS')
     }
 
     stages {
@@ -49,29 +47,17 @@ pipeline {
                         dir("${REPO_ROOT}/${c}") {
                             withAWS(credentials: "${AWS_CREDENTIALS_ID}", region: "${AWS_REGION}") {
 
-                                //  Init
+                                // Init
                                 echo "--> Init: ${c}"
                                 sh "terraform init -input=false -reconfigure"
 
-                                //  Validate
-                                echo "--> Validate: ${c}"
-                                sh "terraform validate"
-
-                                //  Plan
+                                // Plan
                                 echo "--> Plan: ${c}"
-                                sh "terraform plan -input=false -var-file=../../envs/${TF_VAR_env}.tfvars -out=plan-${TF_VAR_env}-${c}.tfplan"
-                                archiveArtifacts artifacts: "plan-${TF_VAR_env}-${c}.tfplan", fingerprint: true
+                                sh "terraform plan -input=false -out=plan-${c}.tfplan"
 
                                 // Apply
-                                if (env.TF_VAR_env == 'prod') {
-                                    input message: "Approve apply for ${c} in ${TF_VAR_env}?"
-                                }
                                 echo "--> Apply: ${c}"
-                                sh "terraform apply -input=false plan-${TF_VAR_env}-${c}.tfplan"
-
-                                // 5️⃣ Save Outputs
-                                sh "terraform output -json > outputs-${c}.json || true"
-                                archiveArtifacts artifacts: "outputs-${c}.json"
+                                sh "terraform apply -input=false plan-${c}.tfplan"
                             }
                         }
                     }
@@ -82,14 +68,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Direct deployment finished for ${TF_VAR_env}"
+            echo "✅ Deployment finished"
         }
         failure {
-            echo "❌ Direct deployment FAILED for ${TF_VAR_env}"
-        }
-        always {
-            echo "Cleaning up workspace"
-            // deleteDir()
+            echo "❌ Deployment FAILED"
         }
     }
 }
