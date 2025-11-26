@@ -13,3 +13,6 @@ variable "zone_id" {
 variable "zone_name" {
     default = "joindevops.fun"
 }
+variable "openvpn_pub_key" {
+    
+}
