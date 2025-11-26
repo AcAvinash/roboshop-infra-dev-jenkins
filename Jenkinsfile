@@ -22,7 +22,7 @@ pipeline {
         stage('Prepare Components List') {
             steps {
                 script {
-                    components = [
+                    env.COMPONENTS = [
                         '00-vpc',
                         '10-sg',
                         '20-bastion',
@@ -32,32 +32,28 @@ pipeline {
                         '60-acm',
                         '70-frontend-alb',
                         '90-components'
-                    ]
-                    env.COMPONENTS = components.join(',')
+                    ].join(',')
                 }
             }
         }
 
-        stage('Terraform: Sequential Deploy') {
+        stage('Terraform Run') {
             steps {
                 script {
                     def comps = env.COMPONENTS.split(',')
-                    for (c in comps) {
-                        echo "==> Processing Component: ${c}"
-                        dir("${REPO_ROOT}/${c}") {
-                            withAWS(credentials: "${AWS_CREDENTIALS_ID}", region: "${AWS_REGION}") {
 
-                                // Init
-                                echo "--> Init: ${c}"
+                    for (c in comps) {
+
+                        echo "===== Processing: ${c} ====="
+
+                        dir("${REPO_ROOT}/${c}") {
+                            withAWS(credentials: AWS_CREDENTIALS_ID, region: AWS_REGION) {
+
                                 sh "terraform init -input=false -reconfigure"
 
-                                // Plan
-                                echo "--> Plan: ${c}"
-                                sh "terraform plan -input=false -out=plan-${c}.tfplan"
+                                sh "terraform plan -input=false"
 
-                                // Apply
-                                echo "--> Apply: ${c}"
-                                sh "terraform apply -input=false plan-${c}.tfplan"
+                                sh "terraform apply -input=false -auto-approve"
                             }
                         }
                     }
@@ -67,11 +63,10 @@ pipeline {
     }
 
     post {
-        success {
-            echo "✅ Deployment finished"
-        }
-        failure {
-            echo "❌ Deployment FAILED"
-        }
+        success { echo "✅ Deployment Completed" }
+        failure { echo "❌ Deployment Failed" }
     }
 }
+
+
+
