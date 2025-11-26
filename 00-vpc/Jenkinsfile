@@ -1,0 +1,97 @@
+pipeline {
+    agent {
+        label 'AGENT-1'
+    }
+
+    environment { 
+        appVersion = ''
+        REGION = "us-east-1"
+        ACC_ID = "021891615305"
+        PROJECT = "roboshop"
+        COMPONENT = "catalogue"
+        USERNAME = "acavinash"
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        ansiColor('xterm')
+    }
+
+    stages {
+        // stage('Read package.json') {
+        //     steps {
+        //         script {
+        //             def packageJson = readJSON file: 'package.json'
+        //             appVersion = packageJson.version
+        //             echo "Package version: ${appVersion}"
+        //         }
+        //     }
+        // }
+
+        stage('Terraform Init') {
+            steps {
+                script {
+                    withAWS(credentials: 'aws-cred', region: "${REGION}") {
+                        sh """
+                            cd 00-vpc
+                            terraform init -reconfigure
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                script {
+                    withAWS(credentials: 'aws-cred', region: "${REGION}") {
+                        sh """
+                            cd 00-vpc
+                            terraform plan
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                input message: "Should we continue with Terraform Apply?", ok: "Yes", submitter: "admin,avinash"
+                script {
+                    withAWS(credentials: 'aws-cred', region: "${REGION}") {
+                        sh """
+                            cd 00-vpc
+                            terraform apply -auto-approve
+                        """
+                    }
+                }
+            }
+        }
+
+      // Down stream job
+        stage('Trigger SG') {
+            steps {
+                script {
+                    build job: '10-sg', 
+                      propagate: false,  // even SG fails VPC will not be effected
+                      wait: false // VPC will not wait for SG pipeline completion
+                }
+            }
+        }
+
+    }
+
+    post { 
+        always { 
+            echo 'Cleaning workspace...'
+            deleteDir()
+        }
+        success { 
+            echo 'Pipeline completed successfully!'
+        }
+        failure { 
+            echo 'Pipeline failed!'
+        }
+    }
+}
